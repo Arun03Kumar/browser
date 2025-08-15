@@ -69,6 +69,6 @@ ipcMain.on("window-close", () => {
   BrowserWindow.getFocusedWindow()?.close();
 });
 
-ipcMain.handle("http-request", async (event, url) => {
-  return await httpRequest(url);
+ipcMain.handle("http-request", async (event, url, options = {}) => {
+  return await httpRequest(url, options);
 });

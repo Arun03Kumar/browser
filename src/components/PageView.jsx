@@ -1,37 +1,294 @@
-import { useEffect, useRef } from "react";
-import { lex } from "../engine/lexer";
-import { layout, PAGE_WIDTH } from "../engine/layout";
+import { useEffect, useRef, useState } from "react";
+import { lex, HTMLParser } from "../engine/lexer";
+import { layout, layoutFromTree, PAGE_WIDTH } from "../engine/layout";
+import { computeBlockLayout } from "../engine/blockLayout";
 
-export default function PageView({ tab, onUpdateTab }) {
+export default function PageView({ tab, onUpdateTab, onNavigate }) {
   const canvasRef = useRef(null);
+  const containerRef = useRef(null);
+  const hitListRef = useRef([]);
+  const [focusedElement, setFocusedElement] = useState(null);
 
   useEffect(() => {
     if (!tab || !tab.html) return;
-    let { tokens, displayList } = tab;
-    if (!tokens) {
-      tokens = lex(tab.html);
-      displayList = layout(tokens);
-      onUpdateTab(tab.id, { tokens, displayList });
+
+    try {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const ctx = canvas.getContext("2d");
+      const containerWidth = containerRef.current?.clientWidth || PAGE_WIDTH;
+
+      let { tree, displayList } = tab;
+
+      // Only update if we don't have the required data
+      if (!tree) {
+        try {
+          const parser = new HTMLParser(tab.html);
+          tree = parser.parse();
+        } catch (e) {
+          console.warn("HTML parsing failed:", e);
+          tree = null;
+        }
+        // Don't call onUpdateTab here, just use the local tree
+      }
+
+      if (!displayList && tree) {
+        displayList = computeBlockLayout(tree, containerWidth);
+        // Only update the tab if we successfully computed the layout
+        if (displayList && displayList.length >= 0) {
+          onUpdateTab(tab.id, { tree, displayList });
+        }
+      }
+
+      // Ensure displayList is an array
+      if (!displayList) {
+        displayList = [];
+      }
+
+      // Set canvas dimensions
+      const height = Math.max(
+        displayList.length > 0
+          ? Math.max(
+              ...displayList.map((item) => (item.y || 0) + (item.height || 20))
+            ) + 40
+          : 600,
+        400
+      );
+
+      canvas.width = containerWidth;
+      canvas.height = height;
+
+      // Clear canvas
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Build hit list for click detection
+      const hitList = [];
+
+      // Render display list
+      for (const item of displayList) {
+        if (item.type === "text") {
+          ctx.fillStyle = item.color || "#000000";
+          ctx.font = item.font || "16px system-ui";
+          ctx.textAlign = "left";
+          ctx.textBaseline = "alphabetic";
+          ctx.fillText(item.text, item.x, item.y);
+
+          // Add to hit list if it's a link
+          if (
+            item.node &&
+            item.node.linkNode &&
+            item.node.linkNode.attributes.href
+          ) {
+            const metrics = ctx.measureText(item.text);
+            hitList.push({
+              x: item.x,
+              y: item.y - 12,
+              width: metrics.width,
+              height: 16,
+              node: item.node.linkNode,
+              type: "link",
+            });
+          }
+
+          // Add to hit list if it's an input or button
+          if (
+            item.node &&
+            (item.node.tag === "input" || item.node.tag === "button")
+          ) {
+            hitList.push({
+              x: item.x - 4,
+              y: item.y - 16,
+              width: 200,
+              height: 24,
+              node: item.node,
+              type: item.node.tag,
+            });
+          }
+        } else if (item.type === "rect") {
+          ctx.fillStyle = item.color;
+          ctx.fillRect(item.x, item.y, item.width, item.height);
+        } else if (item.type === "border") {
+          ctx.strokeStyle = item.color;
+          ctx.lineWidth = item.thickness;
+          ctx.strokeRect(item.x, item.y, item.width, item.height);
+        } else if (item.type === "cursor") {
+          ctx.fillStyle = item.color;
+          ctx.fillRect(item.x, item.y, item.width, item.height);
+        }
+      }
+
+      hitListRef.current = hitList;
+    } catch (error) {
+      console.error("PageView render error:", error);
     }
+  }, [tab.id, tab.html, tab.tree, tab.displayList, focusedElement]);
+
+  // Handle keyboard input
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (focusedElement && focusedElement.tag === "input") {
+        e.preventDefault();
+
+        let value = focusedElement.attributes.value || "";
+
+        if (e.key === "Backspace") {
+          value = value.slice(0, -1);
+        } else if (e.key.length === 1) {
+          value += e.key;
+        }
+
+        // Update the focused element's value
+        focusedElement.attributes.value = value;
+
+        // Update tab to trigger re-render
+        onUpdateTab(tab.id, {
+          tree: { ...tab.tree }, // Force new reference
+          displayList: null, // Force re-layout
+        });
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [focusedElement, tab.id, tab.tree, onUpdateTab]);
+
+  // Handle canvas clicks
+  useEffect(() => {
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    const height = (displayList.length
-      ? Math.max(...displayList.map(d => d.y + 24))
-      : 400);
-    canvas.width = PAGE_WIDTH;
-    canvas.height = height;
-    ctx.fillStyle = "#181818";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#e6e6e6";
-    for (const item of displayList) {
-      ctx.font = item.font;
-      ctx.fillText(item.text, item.x, item.y);
+    if (!canvas) return;
+
+    function handleClick(e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      console.log(`Canvas click: ${x.toFixed(2)}, ${y.toFixed(2)}`);
+      console.log(`Available hit targets: ${hitListRef.current.length}`);
+
+      // Clear previous focus
+      if (focusedElement) {
+        focusedElement.isFocused = false;
+      }
+      setFocusedElement(null);
+
+      // Find clicked element
+      const hitTarget = hitListRef.current.find(
+        (target) =>
+          x >= target.x &&
+          x <= target.x + target.width &&
+          y >= target.y &&
+          y <= target.y + target.height
+      );
+
+      if (hitTarget) {
+        console.log(`Hit found:`, hitTarget);
+
+        if (hitTarget.type === "link") {
+          const href = hitTarget.node.attributes.href;
+          console.log(`Following link: ${href}`);
+
+          // Resolve URL
+          let finalUrl;
+          if (href.startsWith("http://") || href.startsWith("https://")) {
+            finalUrl = href;
+          } else if (href.startsWith("/")) {
+            const currentUrl = new URL(tab.url);
+            finalUrl = `${currentUrl.protocol}//${currentUrl.host}${href}`;
+          } else if (href.includes("://")) {
+            finalUrl = href;
+          } else {
+            const currentUrl = new URL(tab.url);
+            const basePath =
+              currentUrl.pathname.split("/").slice(0, -1).join("/") || "/";
+            finalUrl = `${currentUrl.protocol}//${currentUrl.host}${basePath}/${href}`;
+          }
+
+          onNavigate(finalUrl);
+        } else if (hitTarget.type === "input") {
+          console.log("Focusing input element");
+          hitTarget.node.isFocused = true;
+          setFocusedElement(hitTarget.node);
+
+          // Trigger re-render to show focus
+          onUpdateTab(tab.id, {
+            tree: { ...tab.tree },
+            displayList: null,
+          });
+        } else if (hitTarget.type === "button") {
+          console.log("Button clicked");
+
+          // Find parent form
+          let formNode = hitTarget.node.parent;
+          while (formNode && formNode.tag !== "form") {
+            formNode = formNode.parent;
+          }
+
+          if (formNode && formNode.attributes.action) {
+            console.log("Submitting form");
+
+            // Collect form data
+            const inputs = [];
+            function collectInputs(node) {
+              if (node.tag === "input" && node.attributes.name) {
+                inputs.push(node);
+              }
+              if (node.children) {
+                node.children.forEach(collectInputs);
+              }
+            }
+            collectInputs(formNode);
+
+            // Build form data
+            const formData = new URLSearchParams();
+            for (const input of inputs) {
+              const name = input.attributes.name;
+              const value = input.attributes.value || "";
+              formData.append(name, value);
+            }
+
+            // Submit form
+            const actionUrl = formNode.attributes.action;
+            const method = (formNode.attributes.method || "GET").toUpperCase();
+
+            let finalUrl;
+            if (
+              actionUrl.startsWith("http://") ||
+              actionUrl.startsWith("https://")
+            ) {
+              finalUrl = actionUrl;
+            } else {
+              const currentUrl = new URL(tab.url);
+              finalUrl = `${currentUrl.protocol}//${currentUrl.host}${actionUrl}`;
+            }
+
+            if (method === "POST") {
+              onNavigate(finalUrl, "POST", formData.toString());
+            } else {
+              const url = new URL(finalUrl);
+              url.search = formData.toString();
+              onNavigate(url.toString());
+            }
+          }
+        }
+      } else {
+        console.log("Hit found: false");
+      }
     }
-  }, [tab, onUpdateTab]);
+
+    canvas.addEventListener("click", handleClick);
+    return () => canvas.removeEventListener("click", handleClick);
+  }, [onNavigate, focusedElement, tab.id, tab.url, onUpdateTab]);
 
   return (
-    <div className="w-full h-full overflow-auto">
-      <canvas ref={canvasRef} className="block mx-auto" />
+    <div ref={containerRef} className="w-full h-full overflow-auto">
+      <canvas
+        ref={canvasRef}
+        className="block mx-auto cursor-default"
+        tabIndex={0}
+        style={{ outline: "none" }}
+      />
     </div>
   );
 }

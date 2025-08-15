@@ -13,6 +13,7 @@ export default function BrowserHeader() {
       url: "",
       html: "",
       tokens: null,
+      tree: null,
       displayList: null,
       history: [],
       historyIndex: -1,
@@ -20,12 +21,9 @@ export default function BrowserHeader() {
   ]);
   const [activeTabId, setActiveTabId] = useState(1);
 
-  const updateTab = useCallback(
-    (id, data) => {
-      setTabs((ts) => ts.map((t) => (t.id === id ? { ...t, ...data } : t)));
-    },
-    []
-  );
+  const updateTab = useCallback((id, data) => {
+    setTabs((ts) => ts.map((t) => (t.id === id ? { ...t, ...data } : t)));
+  }, []);
 
   const addTab = () => {
     const id = Date.now();
@@ -37,6 +35,7 @@ export default function BrowserHeader() {
         url: "",
         html: "",
         tokens: null,
+        tree: null,
         displayList: null,
         history: [],
         historyIndex: -1,
@@ -45,57 +44,129 @@ export default function BrowserHeader() {
     setActiveTabId(id);
   };
 
-  const navigateTo = async (finalUrl) => {
+  const switchTab = (tabId) => {
+    setActiveTabId(tabId);
+  };
+
+  const navigateTo = async (finalUrl, method = "GET", body = null) => {
     if (!finalUrl) return;
+
     try {
-      const body = await window.electronAPI.httpRequest(finalUrl);
+      console.log(`Navigating to: ${finalUrl} (${method})`);
+
+      let requestOptions;
+      if (method === "POST" && body) {
+        requestOptions = {
+          url: finalUrl,
+          method: "POST",
+          body: body,
+        };
+      } else {
+        requestOptions = finalUrl;
+      }
+
+      const responseBody = await window.electronAPI.httpRequest(requestOptions);
+
       setTabs((ts) =>
         ts.map((t) => {
           if (t.id !== activeTabId) return t;
+
           const newHistory = t.history
             .slice(0, t.historyIndex + 1)
             .concat(finalUrl);
           return {
             ...t,
             url: finalUrl,
-            html: body,
+            html: responseBody,
+            tree: null, // Reset to force re-parsing
             tokens: null,
             displayList: null,
             history: newHistory,
             historyIndex: newHistory.length - 1,
-            title: deriveTitle(body) || finalUrl,
+            title: deriveTitle(responseBody) || finalUrl,
           };
         })
       );
     } catch (e) {
+      console.error("Navigation error:", e);
       updateTab(activeTabId, {
         html: `<p><b>Error:</b> ${e.message}</p>`,
+        tree: null,
         tokens: null,
         displayList: null,
       });
     }
   };
 
-  const goBack = () => {
-    setTabs((ts) =>
-      ts.map((t) => {
-        if (t.id !== activeTabId) return t;
-        if (t.historyIndex <= 0) return t;
-        const idx = t.historyIndex - 1;
-        return { ...t, historyIndex: idx, url: t.history[idx] };
-      })
-    );
+  const goBack = async () => {
+    const activeTab = tabs.find((t) => t.id === activeTabId);
+    if (!activeTab || activeTab.historyIndex <= 0) return;
+
+    const newIndex = activeTab.historyIndex - 1;
+    const url = activeTab.history[newIndex];
+
+    try {
+      const body = await window.electronAPI.httpRequest(url);
+      setTabs((ts) =>
+        ts.map((t) => {
+          if (t.id !== activeTabId) return t;
+          return {
+            ...t,
+            url: url,
+            html: body,
+            tokens: null,
+            displayList: null,
+            tree: null, // Reset tree to force re-parsing
+            historyIndex: newIndex,
+            title: deriveTitle(body) || url,
+          };
+        })
+      );
+    } catch (e) {
+      console.error("Failed to load page from history:", e);
+      updateTab(activeTabId, {
+        html: `<p><b>Error loading page:</b> ${e.message}</p>`,
+        tokens: null,
+        displayList: null,
+        tree: null,
+      });
+    }
   };
 
-  const goForward = () => {
-    setTabs((ts) =>
-      ts.map((t) => {
-        if (t.id !== activeTabId) return t;
-        if (t.historyIndex >= t.history.length - 1) return t;
-        const idx = t.historyIndex + 1;
-        return { ...t, historyIndex: idx, url: t.history[idx] };
-      })
-    );
+  const goForward = async () => {
+    const activeTab = tabs.find((t) => t.id === activeTabId);
+    if (!activeTab || activeTab.historyIndex >= activeTab.history.length - 1)
+      return;
+
+    const newIndex = activeTab.historyIndex + 1;
+    const url = activeTab.history[newIndex];
+
+    try {
+      const body = await window.electronAPI.httpRequest(url);
+      setTabs((ts) =>
+        ts.map((t) => {
+          if (t.id !== activeTabId) return t;
+          return {
+            ...t,
+            url: url,
+            html: body,
+            tokens: null,
+            displayList: null,
+            tree: null, // Reset tree to force re-parsing
+            historyIndex: newIndex,
+            title: deriveTitle(body) || url,
+          };
+        })
+      );
+    } catch (e) {
+      console.error("Failed to load page from history:", e);
+      updateTab(activeTabId, {
+        html: `<p><b>Error loading page:</b> ${e.message}</p>`,
+        tokens: null,
+        displayList: null,
+        tree: null,
+      });
+    }
   };
 
   const refresh = () => {
@@ -112,7 +183,7 @@ export default function BrowserHeader() {
         <Tabs
           tabs={tabs}
           activeTabId={activeTabId}
-          onTabClick={setActiveTabId}
+          onTabClick={switchTab}
           onAddTab={addTab}
         />
         <WindowControls />
@@ -121,7 +192,11 @@ export default function BrowserHeader() {
       <div className="flex items-center gap-3 px-4 h-12 border-b border-gray-700 bg-[#202020]">
         <Navigation
           canBack={!!(activeTab && activeTab.historyIndex > 0)}
-          canForward={!!(activeTab && activeTab.historyIndex < activeTab.history.length - 1)}
+          canForward={
+            !!(
+              activeTab && activeTab.historyIndex < activeTab.history.length - 1
+            )
+          }
           onBack={goBack}
           onForward={goForward}
           onRefresh={refresh}
@@ -135,7 +210,11 @@ export default function BrowserHeader() {
       {/* Below header, the page viewport: */}
       <div className="flex-1 min-h-0">
         {activeTab ? (
-          <PageView tab={activeTab} onUpdateTab={updateTab} />
+          <PageView
+            tab={activeTab}
+            onUpdateTab={updateTab}
+            onNavigate={(url, method, body) => navigateTo(url, method, body)}
+          />
         ) : (
           <div className="p-4 text-sm text-gray-400">No tab selected</div>
         )}

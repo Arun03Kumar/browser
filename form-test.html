@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Form Test - Chapter 8 Demo</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        background-color: #f9f9f9;
+      }
+      h1 {
+        color: #333;
+        border-bottom: 2px solid #007acc;
+      }
+      form {
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin: 20px 0;
+      }
+      label {
+        display: block;
+        margin: 10px 0 5px 0;
+        font-weight: bold;
+      }
+      input[type="text"],
+      input[type="email"] {
+        width: 200px;
+        padding: 5px;
+        border: 1px solid #ccc;
+        border-radius: 3px;
+      }
+      button {
+        background-color: #007acc;
+        color: white;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        margin: 10px 5px 0 0;
+      }
+      .form-section {
+        margin: 20px 0;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+      }
+      .demo-info {
+        background-color: #e7f3ff;
+        padding: 15px;
+        border-left: 4px solid #007acc;
+        margin: 20px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Chapter 8: Forms and User Input</h1>
+
+    <div class="demo-info">
+      <h3>🎯 Demo Features:</h3>
+      <ul>
+        <li>
+          <strong>Input Fields:</strong> Click to focus, type to enter text
+        </li>
+        <li>
+          <strong>Form Submission:</strong> Click submit buttons to send POST
+          requests
+        </li>
+        <li>
+          <strong>Data Collection:</strong> Form inputs are collected and
+          encoded
+        </li>
+        <li>
+          <strong>POST Requests:</strong> Forms send data to server endpoints
+        </li>
+      </ul>
+    </div>
+
+    <div class="form-section">
+      <h2>Contact Form</h2>
+      <form action="https://httpbin.org/post" method="post">
+        <label for="name">Name:</label>
+        <input
+          type="text"
+          id="name"
+          name="name"
+          placeholder="Enter your name"
+        />
+
+        <label for="email">Email:</label>
+        <input
+          type="email"
+          id="email"
+          name="email"
+          placeholder="Enter your email"
+        />
+
+        <label for="message">Message:</label>
+        <input
+          type="text"
+          id="message"
+          name="message"
+          placeholder="Enter your message"
+        />
+
+        <br />
+        <button type="submit">Send Message</button>
+        <button type="button">Cancel</button>
+      </form>
+    </div>
+
+    <div class="form-section">
+      <h2>Search Form</h2>
+      <form action="https://httpbin.org/post" method="post">
+        <label for="query">Search Query:</label>
+        <input
+          type="text"
+          id="query"
+          name="q"
+          placeholder="What are you looking for?"
+        />
+
+        <label for="category">Category:</label>
+        <input type="text" id="category" name="category" value="web" />
+
+        <br />
+        <button type="submit">Search</button>
+      </form>
+    </div>
+
+    <div class="form-section">
+      <h2>User Registration</h2>
+      <form action="https://httpbin.org/post" method="post">
+        <label for="username">Username:</label>
+        <input
+          type="text"
+          id="username"
+          name="username"
+          placeholder="Choose a username"
+        />
+
+        <label for="firstname">First Name:</label>
+        <input
+          type="text"
+          id="firstname"
+          name="firstname"
+          placeholder="Your first name"
+        />
+
+        <label for="lastname">Last Name:</label>
+        <input
+          type="text"
+          id="lastname"
+          name="lastname"
+          placeholder="Your last name"
+        />
+
+        <br />
+        <button type="submit">Register</button>
+        <button type="button">Reset</button>
+      </form>
+    </div>
+
+    <div class="demo-info">
+      <h3>💡 Technical Implementation:</h3>
+      <ul>
+        <li>
+          <strong>Input Layout:</strong> Custom InputLayoutNode with proper
+          sizing
+        </li>
+        <li>
+          <strong>Focus Management:</strong> Visual cursor and keyboard input
+          handling
+        </li>
+        <li>
+          <strong>Form Data Encoding:</strong> URL-encoded form data for POST
+          requests
+        </li>
+        <li>
+          <strong>HTTP Client:</strong> Enhanced to support POST with request
+          body
+        </li>
+      </ul>
+
+      <p>
+        <strong>Forms use httpbin.org</strong> which will echo back the
+        submitted data, demonstrating that the POST request works correctly!
+      </p>
+    </div>
+
+    <hr />
+    <p>
+      <a href="test.html">← Back to Styling Demo</a> |
+      <a href="https://httpbin.org/get">Test GET Request</a>
+    </p>
+  </body>
+</html>

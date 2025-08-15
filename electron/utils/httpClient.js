@@ -1,9 +1,37 @@
 import net from "net";
 import tls from "tls";
 import { URL } from "url";
+import fs from "fs";
+import path from "path";
 
-export function httpRequest(rawUrl) {
+export function httpRequest(options) {
   return new Promise((resolve, reject) => {
+    // Handle both old string format and new object format
+    let rawUrl,
+      method = "GET",
+      body = null;
+
+    if (typeof options === "string") {
+      rawUrl = options;
+    } else {
+      rawUrl = options.url;
+      method = options.method || "GET";
+      body = options.body;
+    }
+
+    // Handle file:// protocol
+    if (rawUrl.startsWith("file://")) {
+      try {
+        const filePath = rawUrl.replace("file://", "").replace(/\//g, path.sep);
+        const content = fs.readFileSync(filePath, "utf8");
+        resolve(content);
+        return;
+      } catch (error) {
+        reject(new Error(`File not found: ${rawUrl}`));
+        return;
+      }
+    }
+
     let url;
     try {
       url = new URL(rawUrl);
@@ -14,7 +42,19 @@ export function httpRequest(rawUrl) {
     const host = url.hostname;
     const path = url.pathname + (url.search || "");
 
-    const request = `GET ${path} HTTP/1.0\r\nHost: ${host}\r\n\r\n`;
+    let request = `${method} ${path} HTTP/1.0\r\nHost: ${host}\r\n`;
+
+    if (body && method === "POST") {
+      const contentLength = Buffer.byteLength(body, "utf8");
+      request += `Content-Type: application/x-www-form-urlencoded\r\n`;
+      request += `Content-Length: ${contentLength}\r\n`;
+    }
+
+    request += `\r\n`;
+
+    if (body && method === "POST") {
+      request += body;
+    }
 
     const onData = (socket) => {
       let data = "";
