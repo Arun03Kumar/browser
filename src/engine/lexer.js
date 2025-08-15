@@ -80,30 +80,80 @@ const HEAD_TAGS = new Set([
 ]);
 
 export class HTMLParser {
-  constructor(html) {
-    this.html = html;
+  constructor(body) {
+    this.body = body;
     this.unfinished = [];
+    this.scripts = []; // Store JavaScript code
+    this.styles = []; // Store CSS code
   }
 
   parse() {
     let text = "";
     let inTag = false;
-    for (let i = 0; i < this.html.length; i++) {
-      const c = this.html[i];
-      if (c === "<") {
-        if (text) this.addText(text);
-        text = "";
+    let inScript = false;
+    let scriptContent = "";
+    let inStyle = false;
+    let styleContent = "";
+
+    for (let i = 0; i < this.body.length; i++) {
+      const char = this.body[i];
+
+      if (char === "<" && !inScript && !inStyle) {
         inTag = true;
-      } else if (c === ">") {
-        this.addTag(text);
+        if (text.trim()) this.addText(text);
         text = "";
+      } else if (char === ">" && inTag && !inScript && !inStyle) {
         inTag = false;
+        const tagResult = this.addTag(text);
+        if (tagResult && tagResult.isScript) {
+          inScript = true;
+          scriptContent = "";
+        } else if (tagResult && tagResult.isStyle) {
+          inStyle = true;
+          styleContent = "";
+        }
+        text = "";
+      } else if (
+        inScript &&
+        char === "<" &&
+        this.body.slice(i, i + 9) === "</script>"
+      ) {
+        // End of script tag
+        this.scripts.push(scriptContent.trim());
+        inScript = false;
+        this.addTag("/script");
+        i += 8; // Skip "</script"
+        text = "";
+      } else if (
+        inStyle &&
+        char === "<" &&
+        this.body.slice(i, i + 8) === "</style>"
+      ) {
+        // End of style tag
+        this.styles.push(styleContent.trim());
+        inStyle = false;
+        this.addTag("/style");
+        i += 7; // Skip "</style"
+        text = "";
+      } else if (inScript) {
+        scriptContent += char;
+      } else if (inStyle) {
+        styleContent += char;
+      } else if (!inTag) {
+        text += char;
       } else {
-        text += c;
+        text += char;
       }
     }
-    if (!inTag && text) this.addText(text);
-    return this.finish();
+
+    if (!inTag && text.trim()) {
+      this.addText(text);
+    }
+
+    const tree = this.finish();
+    tree.scripts = this.scripts; // Attach scripts to the tree
+    tree.styles = this.styles; // Attach styles to the tree
+    return tree;
   }
 
   addText(text) {
@@ -120,6 +170,9 @@ export class HTMLParser {
     if (!tag) return;
     if (tag.startsWith("!")) return; // comments / doctype ignore
     this.implicitTags(tag);
+
+    let result = {};
+
     if (tag.startsWith("/")) {
       if (this.unfinished.length <= 1) return; // ignore extra close
       const node = this.unfinished.pop();
@@ -134,7 +187,16 @@ export class HTMLParser {
       const parent = this.unfinished[this.unfinished.length - 1] || null;
       const node = new ElementNode(tag, attrs, parent);
       this.unfinished.push(node);
+
+      // Mark special tags for content parsing
+      if (tag === "script") {
+        result.isScript = true;
+      } else if (tag === "style") {
+        result.isStyle = true;
+      }
     }
+
+    return result;
   }
 
   getTagAndAttrs(raw) {

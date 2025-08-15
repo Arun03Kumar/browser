@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>JavaScript Test Page</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        background-color: white;
+      }
+      .container {
+        border: 1px solid #ccc;
+        padding: 20px;
+        margin: 20px 0;
+        background-color: #f9f9f9;
+      }
+      .highlight {
+        background-color: yellow;
+        padding: 5px;
+        border: 2px solid red;
+      }
+      button {
+        background-color: #4caf50;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        margin: 5px;
+      }
+      button:hover {
+        background-color: #45a049;
+      }
+      input {
+        margin: 5px 0;
+        padding: 5px;
+        font-size: 16px;
+      }
+      #output {
+        border: 1px solid #ddd;
+        padding: 10px;
+        margin: 10px 0;
+        background-color: #f5f5f5;
+        min-height: 50px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>JavaScript Interactive Browser Test</h1>
+
+    <div class="container">
+      <h2>Basic JavaScript Functions</h2>
+      <button onclick="changeText()">Change Text</button>
+      <button onclick="addNumbers()">Calculate 5 + 3</button>
+      <button onclick="changeStyle()">Change Style</button>
+      <p id="demo">This text will change when you click the button!</p>
+    </div>
+
+    <div class="container">
+      <h2>Interactive Form with JavaScript</h2>
+      <input type="text" id="nameInput" placeholder="Enter your name" />
+      <button onclick="greetUser()">Greet Me</button>
+      <button onclick="clearAll()">Clear</button>
+      <div id="greeting"></div>
+    </div>
+
+    <div class="container">
+      <h2>Event Listeners</h2>
+      <button id="eventButton">Click Me (Event Listener)</button>
+      <button onclick="addEventListeners()">Add More Events</button>
+      <div id="eventOutput"></div>
+    </div>
+
+    <div class="container">
+      <h2>Console Output</h2>
+      <button onclick="logToConsole()">Log to Console</button>
+      <button onclick="showAlert()">Show Alert</button>
+      <div id="output"></div>
+    </div>
+
+    <script>
+      // Basic variable and function declarations
+      var clickCount = 0;
+      var userName = "";
+
+      function changeText() {
+        var element = document.getElementById("demo");
+        if (element) {
+          element.textContent =
+            "Text changed by JavaScript! Click count: " + ++clickCount;
+        }
+      }
+
+      function addNumbers() {
+        var result = 5 + 3;
+        var element = document.getElementById("demo");
+        if (element) {
+          element.textContent = "5 + 3 = " + result;
+        }
+        console.log("Calculation result:", result);
+      }
+
+      function changeStyle() {
+        var element = document.getElementById("demo");
+        if (element) {
+          element.className = "highlight";
+          element.textContent = "Style changed!";
+        }
+      }
+
+      function greetUser() {
+        var input = document.getElementById("nameInput");
+        var greeting = document.getElementById("greeting");
+
+        if (input && greeting) {
+          var name = input.getAttribute("value") || "";
+          if (name) {
+            greeting.textContent =
+              "Hello, " + name + "! Welcome to our JavaScript browser!";
+          } else {
+            greeting.textContent = "Please enter your name first.";
+          }
+        }
+      }
+
+      function clearAll() {
+        var input = document.getElementById("nameInput");
+        var greeting = document.getElementById("greeting");
+        var demo = document.getElementById("demo");
+
+        if (input) input.setAttribute("value", "");
+        if (greeting) greeting.textContent = "";
+        if (demo) {
+          demo.textContent = "This text will change when you click the button!";
+          demo.className = "";
+        }
+        clickCount = 0;
+      }
+
+      function addEventListeners() {
+        var button = document.getElementById("eventButton");
+        var output = document.getElementById("eventOutput");
+
+        if (button && output) {
+          button.addEventListener("click", function () {
+            output.textContent =
+              "Event listener fired! Time: " + new Date().toString();
+          });
+          output.textContent = "Event listener added to button!";
+        }
+      }
+
+      function logToConsole() {
+        console.log("This is a console log message!");
+        console.log("Browser JavaScript is working!");
+        console.log("Numbers:", 42, "Strings:", "Hello", "Booleans:", true);
+
+        var output = document.getElementById("output");
+        if (output) {
+          output.textContent = "Check the browser console for log messages!";
+        }
+      }
+
+      function showAlert() {
+        window.alert("Hello from JavaScript!");
+        console.log("Alert was shown");
+      }
+
+      // Automatic initialization
+      console.log("JavaScript loaded successfully!");
+      console.log(
+        "Browser engine supports:",
+        typeof document,
+        typeof window,
+        typeof console
+      );
+    </script>
+  </body>
+</html>

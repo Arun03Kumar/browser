@@ -1,8 +1,7 @@
-import net from "net";
-import tls from "tls";
-import { URL } from "url";
 import fs from "fs";
 import path from "path";
+import https from "https";
+import http from "http";
 
 export function httpRequest(options) {
   return new Promise((resolve, reject) => {
@@ -16,18 +15,44 @@ export function httpRequest(options) {
     } else {
       rawUrl = options.url;
       method = options.method || "GET";
-      body = options.body;
+      body = options.body || null;
     }
+
+    console.log("httpRequest called with:", rawUrl, method);
 
     // Handle file:// protocol
     if (rawUrl.startsWith("file://")) {
       try {
-        const filePath = rawUrl.replace("file://", "").replace(/\//g, path.sep);
+        // Handle file:///C:/ format (Windows)
+        let filePath = rawUrl.replace("file://", "");
+
+        // Handle file:///C:/ format specifically
+        if (filePath.startsWith("/") && filePath.match(/^\/[A-Za-z]:/)) {
+          filePath = filePath.substring(1); // Remove leading slash for Windows paths
+        }
+
+        // Convert forward slashes to backslashes for Windows
+        if (process.platform === "win32") {
+          filePath = filePath.replace(/\//g, path.sep);
+        }
+
+        console.log("Attempting to read file:", filePath);
+
+        if (!fs.existsSync(filePath)) {
+          throw new Error(`File not found: ${filePath}`);
+        }
+
         const content = fs.readFileSync(filePath, "utf8");
+        console.log("File read successfully, length:", content.length);
         resolve(content);
         return;
       } catch (error) {
-        reject(new Error(`File not found: ${rawUrl}`));
+        console.error("File read error:", error);
+        reject(
+          new Error(
+            `File not found or cannot be read: ${rawUrl} (${error.message})`
+          )
+        );
         return;
       }
     }
@@ -36,48 +61,63 @@ export function httpRequest(options) {
     try {
       url = new URL(rawUrl);
     } catch {
-      return reject(new Error("Malformed URL"));
+      reject(new Error(`Invalid URL: ${rawUrl}`));
+      return;
     }
+
     const port = url.port || (url.protocol === "https:" ? 443 : 80);
     const host = url.hostname;
-    const path = url.pathname + (url.search || "");
+    const urlPath = url.pathname + (url.search || "");
 
-    let request = `${method} ${path} HTTP/1.0\r\nHost: ${host}\r\n`;
+    let request = `${method} ${urlPath} HTTP/1.0\r\nHost: ${host}\r\n`;
 
-    if (body && method === "POST") {
-      const contentLength = Buffer.byteLength(body, "utf8");
+    if (method === "POST" && body) {
       request += `Content-Type: application/x-www-form-urlencoded\r\n`;
-      request += `Content-Length: ${contentLength}\r\n`;
+      request += `Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n`;
     }
 
-    request += `\r\n`;
-
-    if (body && method === "POST") {
+    request += "\r\n";
+    if (method === "POST" && body) {
       request += body;
     }
 
-    const onData = (socket) => {
-      let data = "";
-      socket.on("data", (chunk) => (data += chunk.toString()));
-      socket.on("end", () => {
-        const separatorIndex = data.indexOf("\r\n\r\n");
-        const rawHeaders = data.slice(0, separatorIndex);
-        const body = data.slice(separatorIndex + 4);
-        resolve(body); // later you can resolve({ headers: rawHeaders, body })
-      });
-      socket.on("error", reject);
-      socket.write(request);
-    };
+    const protocol = url.protocol === "https:" ? https : http;
+    const clientRequest = protocol.request(
+      {
+        hostname: host,
+        port: port,
+        path: urlPath,
+        method: method,
+        headers: {
+          Host: host,
+          "User-Agent": "SimpleElectronBrowser/1.0",
+          ...(method === "POST" && body
+            ? {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Content-Length": Buffer.byteLength(body, "utf8"),
+              }
+            : {}),
+        },
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => {
+          data += chunk;
+        });
+        res.on("end", () => {
+          resolve(data);
+        });
+      }
+    );
 
-    if (url.protocol === "https:") {
-      const socket = tls.connect(
-        port,
-        host,
-        { rejectUnauthorized: false },
-        () => onData(socket)
-      );
-    } else {
-      const socket = net.connect(port, host, () => onData(socket));
+    clientRequest.on("error", (err) => {
+      reject(err);
+    });
+
+    if (method === "POST" && body) {
+      clientRequest.write(body);
     }
+
+    clientRequest.end();
   });
 }

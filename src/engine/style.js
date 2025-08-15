@@ -333,17 +333,22 @@ export function applyStyles(root, { authorCSS = "", userCSS = "" } = {}) {
   // Start with default browser stylesheet
   let allCSS = DEFAULT_STYLESHEET;
 
-  // Extract <style> embedded sheets
+  // Extract CSS from parsed style tags (preferred method)
   let embedded = "";
-  function extract(node) {
-    if (node instanceof ElementNode && node.tag === "style") {
-      node.children.forEach((ch) => {
-        if (ch.text) embedded += ch.text;
-      });
+  if (root.styles && root.styles.length > 0) {
+    embedded = root.styles.join("\n");
+  } else {
+    // Fallback: Extract <style> embedded sheets from DOM tree
+    function extract(node) {
+      if (node instanceof ElementNode && node.tag === "style") {
+        node.children.forEach((ch) => {
+          if (ch.text) embedded += ch.text;
+        });
+      }
+      node.children && node.children.forEach(extract);
     }
-    node.children && node.children.forEach(extract);
+    extract(root);
   }
-  extract(root);
 
   // Combine all stylesheets in order
   allCSS += "\n" + embedded + "\n" + authorCSS + "\n" + userCSS;

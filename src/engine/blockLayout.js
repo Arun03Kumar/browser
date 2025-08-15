@@ -1,4 +1,4 @@
-// Chapter 5 style block + inline layout engine (simplified for canvas rendering)
+// Enhanced block + inline layout engine with proper CSS styling support
 // Uses the DOM tree produced by HTMLParser (ElementNode/TextNode) from lexer.js
 
 import { ElementNode, TextNode } from "./lexer";
@@ -15,6 +15,50 @@ function fontString(size, weight, style) {
   return `${style === "italic" ? "italic" : "normal"} ${
     weight === "bold" ? "bold" : "normal"
   } ${size}px system-ui`;
+}
+
+// Parse CSS dimension values
+function parseDimension(value, defaultValue = 0) {
+  if (!value || value === "auto") return defaultValue;
+  if (typeof value === "number") return value;
+  const match = String(value).match(/^(\d+(?:\.\d+)?)(px|em|%)?$/);
+  if (match) {
+    const num = parseFloat(match[1]);
+    const unit = match[2] || "px";
+    if (unit === "px") return num;
+    if (unit === "em") return num * 16; // Assume 16px base font size
+    if (unit === "%") return num; // Return percentage as-is
+  }
+  return defaultValue;
+}
+
+// Get margin/padding values from CSS
+function getSpacing(style, property) {
+  const value = style[property] || "0px";
+  const parts = value.split(/\s+/);
+
+  if (parts.length === 1) {
+    const val = parseDimension(parts[0]);
+    return { top: val, right: val, bottom: val, left: val };
+  } else if (parts.length === 2) {
+    const vertical = parseDimension(parts[0]);
+    const horizontal = parseDimension(parts[1]);
+    return {
+      top: vertical,
+      right: horizontal,
+      bottom: vertical,
+      left: horizontal,
+    };
+  } else if (parts.length === 4) {
+    return {
+      top: parseDimension(parts[0]),
+      right: parseDimension(parts[1]),
+      bottom: parseDimension(parts[2]),
+      left: parseDimension(parts[3]),
+    };
+  }
+
+  return { top: 0, right: 0, bottom: 0, left: 0 };
 }
 
 export class DocumentLayoutNode {
@@ -36,7 +80,7 @@ export class DocumentLayoutNode {
     const child = new BlockLayoutNode(this.node, this, null);
     this.children = [child];
     child.layout();
-    this.height = child.height;
+    this.height = child.height + VSTEP; // Add bottom margin
     return this;
   }
 
@@ -55,44 +99,94 @@ export class BlockLayoutNode {
     this.y = 0;
     this.width = 0;
     this.height = 0;
+
+    // CSS properties
+    this.margin = { top: 0, right: 0, bottom: 0, left: 0 };
+    this.padding = { top: 0, right: 0, bottom: 0, left: 0 };
+    this.border = { top: 0, right: 0, bottom: 0, left: 0 };
+
+    // Cursor for inline layout
+    this.cursorX = 0;
   }
 
   layout() {
-    this.x = this.parent.x;
-    this.width = this.parent.width;
+    // Calculate margins and padding from CSS
+    if (this.node.style) {
+      this.margin = getSpacing(this.node.style, "margin");
+      this.padding = getSpacing(this.node.style, "padding");
+
+      // Simple border handling
+      const borderWidth = parseDimension(
+        this.node.style["border-width"] || "0px"
+      );
+      this.border = {
+        top: borderWidth,
+        right: borderWidth,
+        bottom: borderWidth,
+        left: borderWidth,
+      };
+    }
+
+    // Position calculation with proper spacing
+    this.x = this.parent.x + this.margin.left;
+    this.width = this.parent.width - this.margin.left - this.margin.right;
 
     if (this.previous) {
-      this.y = this.previous.y + this.previous.height;
+      this.y =
+        this.previous.y +
+        this.previous.height +
+        this.previous.margin.bottom +
+        this.margin.top;
     } else {
-      this.y = this.parent.y;
+      this.y = this.parent.y + this.margin.top;
     }
 
     const mode = this.layoutMode();
+
     if (mode === "block") {
-      let previous = null;
-      for (const child of this.node.children) {
-        const next = new BlockLayoutNode(child, this, previous);
-        this.children.push(next);
-        previous = next;
-      }
+      this.layoutBlockChildren();
     } else {
-      this.newLine();
-      this.recurse(this.node);
+      this.layoutInlineChildren();
     }
 
+    this.calculateHeight();
+  }
+
+  layoutBlockChildren() {
+    let previous = null;
+    for (const child of this.node.children) {
+      const next = new BlockLayoutNode(child, this, previous);
+      this.children.push(next);
+      next.layout();
+      previous = next;
+    }
+  }
+
+  layoutInlineChildren() {
+    this.newLine();
+    this.recurse(this.node);
+
+    // Layout all line children
     for (const child of this.children) {
       child.layout();
     }
+  }
 
-    this.height = this.children.reduce((sum, child) => sum + child.height, 0);
-
-    // Add margins
-    if (this.node.style && this.node.style["margin-top"]) {
-      const marginTop = parseFloat(this.node.style["margin-top"]);
-      if (!isNaN(marginTop)) {
-        this.y += marginTop;
-      }
+  calculateHeight() {
+    if (this.children.length === 0) {
+      // Minimum height for empty elements
+      const fontSize = parseDimension(this.node.style?.["font-size"] || "16px");
+      this.height =
+        Math.max(fontSize * 1.2, 20) + this.padding.top + this.padding.bottom;
+    } else {
+      const childrenHeight = this.children.reduce((total, child) => {
+        return Math.max(total, child.y + child.height - this.y);
+      }, 0);
+      this.height = childrenHeight + this.padding.top + this.padding.bottom;
     }
+
+    // Add border to height
+    this.height += this.border.top + this.border.bottom;
   }
 
   layoutMode() {
@@ -100,7 +194,14 @@ export class BlockLayoutNode {
       return "inline";
     }
 
-    const hasBlockChildren = this.node.children.some(
+    // Check CSS display property
+    const display = this.node.style?.display;
+    if (display === "block") return "block";
+    if (display === "inline") return "inline";
+    if (display === "none") return "none";
+
+    // Default behavior based on tag
+    const hasBlockChildren = this.node.children?.some(
       (child) => child.type === "element" && this.isBlockElement(child.tag)
     );
 
@@ -108,7 +209,7 @@ export class BlockLayoutNode {
       return "block";
     }
 
-    if (this.node.children.length > 0 || this.isInlineElement(this.node.tag)) {
+    if (this.node.children?.length > 0 || this.isInlineElement(this.node.tag)) {
       return "inline";
     }
 
@@ -129,17 +230,32 @@ export class BlockLayoutNode {
       "h6",
       "form",
       "fieldset",
+      "ul",
+      "ol",
+      "li",
+      "header",
+      "footer",
+      "section",
+      "article",
     ].includes(tag);
   }
 
   isInlineElement(tag) {
-    return ["span", "a", "strong", "em", "input", "button", "label"].includes(
-      tag
-    );
+    return [
+      "span",
+      "a",
+      "strong",
+      "em",
+      "input",
+      "button",
+      "label",
+      "code",
+      "small",
+    ].includes(tag);
   }
 
   newLine() {
-    this.cursorX = 0;
+    this.cursorX = this.padding.left;
     const lastLine = this.children[this.children.length - 1];
     const newLine = new LineLayoutNode(this.node, this, lastLine);
     this.children.push(newLine);
@@ -156,14 +272,14 @@ export class BlockLayoutNode {
     } else if (node.tag === "input" || node.tag === "button") {
       this.input(node);
     } else {
-      for (const child of node.children) {
+      for (const child of node.children || []) {
         this.recurse(child);
       }
     }
   }
 
   word(node, word) {
-    const fontSize = parseFloat(node.style?.["font-size"]) || 16;
+    const fontSize = parseDimension(node.style?.["font-size"] || "16px");
     const fontWeight = node.style?.["font-weight"] || "normal";
     const fontStyle = node.style?.["font-style"] || "normal";
     const font = fontString(fontSize, fontWeight, fontStyle);
@@ -174,7 +290,7 @@ export class BlockLayoutNode {
     ctx.font = font;
     const w = ctx.measureText(word).width;
 
-    if (this.cursorX + w > this.width) {
+    if (this.cursorX + w > this.width - this.padding.right) {
       this.newLine();
     }
 
@@ -189,7 +305,7 @@ export class BlockLayoutNode {
 
   input(node) {
     const w = INPUT_WIDTH_PX;
-    if (this.cursorX + w > this.width) {
+    if (this.cursorX + w > this.width - this.padding.right) {
       this.newLine();
     }
 
@@ -198,7 +314,7 @@ export class BlockLayoutNode {
     const input = new InputLayoutNode(node, line, previousWord);
     line.children.push(input);
 
-    const fontSize = parseFloat(node.style?.["font-size"]) || 16;
+    const fontSize = parseDimension(node.style?.["font-size"] || "16px");
     const font = fontString(fontSize, "normal", "normal");
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
@@ -210,6 +326,8 @@ export class BlockLayoutNode {
 
   paint() {
     const cmds = [];
+
+    // Paint background
     const bgcolor = this.node.style?.["background-color"];
     if (bgcolor && bgcolor !== "transparent") {
       cmds.push({
@@ -221,6 +339,21 @@ export class BlockLayoutNode {
         color: bgcolor,
       });
     }
+
+    // Paint border
+    if (this.border.top > 0) {
+      const borderColor = this.node.style?.["border-color"] || "#000000";
+      cmds.push({
+        type: "border",
+        x: this.x,
+        y: this.y,
+        width: this.width,
+        height: this.height,
+        color: borderColor,
+        thickness: this.border.top,
+      });
+    }
+
     return cmds;
   }
 }
@@ -457,7 +590,9 @@ export class InputLayoutNode {
 }
 
 export function computeBlockLayout(tree, containerWidth = PAGE_WIDTH) {
-  if (!tree) return [];
+  if (!tree) {
+    return [];
+  }
 
   try {
     applyStyles(tree);
@@ -467,7 +602,8 @@ export function computeBlockLayout(tree, containerWidth = PAGE_WIDTH) {
     const displayList = [];
     function paintTree(layoutObject) {
       if (layoutObject.paint) {
-        displayList.push(...layoutObject.paint());
+        const paintCommands = layoutObject.paint();
+        displayList.push(...paintCommands);
       }
       if (layoutObject.children) {
         for (const child of layoutObject.children) {
@@ -477,6 +613,14 @@ export function computeBlockLayout(tree, containerWidth = PAGE_WIDTH) {
     }
 
     paintTree(document);
+
+    if (displayList.length === 0) {
+      console.log("No display commands generated");
+      console.log("Tree structure:", JSON.stringify(tree, null, 2));
+    } else {
+      console.log("Generated", displayList.length, "display commands");
+    }
+
     return displayList;
   } catch (error) {
     console.error("Block layout error:", error);

@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { lex, HTMLParser } from "../engine/lexer";
+import { lex } from "../engine/lexer";
 import { layout, layoutFromTree, PAGE_WIDTH } from "../engine/layout";
+import { HTMLParser } from "../engine/lexer";
 import { computeBlockLayout } from "../engine/blockLayout";
+import { executeJavaScript, triggerEvent } from "../engine/quickjs-engine";
 
 export default function PageView({ tab, onUpdateTab, onNavigate }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const hitListRef = useRef([]);
   const [focusedElement, setFocusedElement] = useState(null);
+  const [jsInterpreter, setJsInterpreter] = useState(null);
 
   useEffect(() => {
     if (!tab || !tab.html) return;
@@ -21,29 +24,52 @@ export default function PageView({ tab, onUpdateTab, onNavigate }) {
 
       let { tree, displayList } = tab;
 
-      // Only update if we don't have the required data
+      // Parse HTML if tree doesn't exist
       if (!tree) {
-        try {
-          const parser = new HTMLParser(tab.html);
-          tree = parser.parse();
-        } catch (e) {
-          console.warn("HTML parsing failed:", e);
-          tree = null;
-        }
-        // Don't call onUpdateTab here, just use the local tree
-      }
+        const parser = new HTMLParser(tab.html);
+        tree = parser.parse();
 
-      if (!displayList && tree) {
+        // Execute JavaScript if present
+        if (tree.scripts && tree.scripts.length > 0) {
+          console.log("Executing JavaScript:", tree.scripts);
+
+          // Create DOM element map for JavaScript access
+          const domElements = new Map();
+          function buildDOMMap(node) {
+            if (node.type === "element" && node.attributes.id) {
+              domElements.set(node.attributes.id, node);
+            }
+            if (node.children) {
+              node.children.forEach(buildDOMMap);
+            }
+          }
+          buildDOMMap(tree);
+
+          // Execute each script asynchronously
+          (async () => {
+            for (const script of tree.scripts) {
+              try {
+                await executeJavaScript(script, domElements);
+              } catch (error) {
+                console.error("Script execution error:", error);
+              }
+            }
+          })();
+        }
+
         displayList = computeBlockLayout(tree, containerWidth);
-        // Only update the tab if we successfully computed the layout
-        if (displayList && displayList.length >= 0) {
-          onUpdateTab(tab.id, { tree, displayList });
-        }
+        onUpdateTab(tab.id, { tree, displayList });
       }
 
-      // Ensure displayList is an array
       if (!displayList) {
         displayList = [];
+      }
+
+      if (displayList.length === 0) {
+        displayList = computeBlockLayout(tree, containerWidth);
+        if (displayList.length > 0) {
+          onUpdateTab(tab.id, { displayList });
+        }
       }
 
       // Set canvas dimensions
@@ -121,7 +147,7 @@ export default function PageView({ tab, onUpdateTab, onNavigate }) {
 
       hitListRef.current = hitList;
     } catch (error) {
-      console.error("PageView render error:", error);
+      console.error("PageView rendering error:", error);
     }
   }, [tab.id, tab.html, tab.tree, tab.displayList, focusedElement]);
 
@@ -141,6 +167,9 @@ export default function PageView({ tab, onUpdateTab, onNavigate }) {
 
         // Update the focused element's value
         focusedElement.attributes.value = value;
+
+        // Trigger JavaScript input event using QuickJS
+        triggerEvent(focusedElement, "input");
 
         // Update tab to trigger re-render
         onUpdateTab(tab.id, {
@@ -184,6 +213,9 @@ export default function PageView({ tab, onUpdateTab, onNavigate }) {
 
       if (hitTarget) {
         console.log(`Hit found:`, hitTarget);
+
+        // Trigger JavaScript click event using QuickJS
+        triggerEvent(hitTarget.node, "click");
 
         if (hitTarget.type === "link") {
           const href = hitTarget.node.attributes.href;

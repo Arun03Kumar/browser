@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>QuickJS Test</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        background-color: white;
+      }
+      .test-container {
+        border: 2px solid #4caf50;
+        padding: 20px;
+        margin: 20px 0;
+        background-color: #f9f9f9;
+      }
+      button {
+        background-color: #4caf50;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        margin: 5px;
+      }
+      button:hover {
+        background-color: #45a049;
+      }
+      #output {
+        border: 1px solid #ddd;
+        padding: 10px;
+        margin: 10px 0;
+        background-color: white;
+        min-height: 100px;
+        font-family: monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🚀 QuickJS JavaScript Engine Test</h1>
+
+    <div class="test-container">
+      <h2>Engine Status</h2>
+      <div id="status">Initializing QuickJS...</div>
+    </div>
+
+    <div class="test-container">
+      <h2>Basic Tests</h2>
+      <button onclick="testMath()">Test Math</button>
+      <button onclick="testStrings()">Test Strings</button>
+      <button onclick="testDOM()">Test DOM</button>
+      <button onclick="clearOutput()">Clear</button>
+      <div id="output">Click buttons to test JavaScript functionality!</div>
+    </div>
+
+    <div class="test-container">
+      <h2>Interactive Test</h2>
+      <input type="text" id="userInput" placeholder="Type something..." />
+      <button onclick="processInput()">Process</button>
+      <div id="result"></div>
+    </div>
+
+    <script>
+      // Test if QuickJS is working
+      console.log("🎯 QuickJS Test Script Starting...");
+
+      // Update status
+      var statusEl = document.getElementById("status");
+      if (statusEl) {
+        statusEl.textContent = "✅ QuickJS Engine Active!";
+        statusEl.style.color = "green";
+        statusEl.style.fontWeight = "bold";
+      }
+
+      function testMath() {
+        var a = 15;
+        var b = 7;
+        var sum = a + b;
+        var product = a * b;
+        var division = a / b;
+
+        var result = "Math Test Results:\n";
+        result += "15 + 7 = " + sum + "\n";
+        result += "15 * 7 = " + product + "\n";
+        result += "15 / 7 = " + division.toFixed(2) + "\n";
+
+        document.getElementById("output").textContent = result;
+        console.log("Math test completed:", result);
+      }
+
+      function testStrings() {
+        var str1 = "Hello";
+        var str2 = "QuickJS";
+        var combined = str1 + " " + str2 + "!";
+        var length = combined.length;
+
+        var result = "String Test Results:\n";
+        result += "String: '" + combined + "'\n";
+        result += "Length: " + length + "\n";
+        result += "Uppercase: " + combined.toUpperCase() + "\n";
+
+        document.getElementById("output").textContent = result;
+        console.log("String test completed:", result);
+      }
+
+      function testDOM() {
+        var element = document.getElementById("output");
+        if (element) {
+          var result = "DOM Test Results:\n";
+          result += "Element found: " + element.tagName + "\n";
+          result += "Element ID: " + element.id + "\n";
+          result += "DOM manipulation successful!\n";
+
+          element.textContent = result;
+          element.style.backgroundColor = "#e8f5e8";
+
+          console.log("DOM test completed");
+        }
+      }
+
+      function processInput() {
+        var input = document.getElementById("userInput");
+        var resultDiv = document.getElementById("result");
+
+        if (input && resultDiv) {
+          var value = input.getAttribute("value") || "";
+          if (value) {
+            var processed =
+              "You typed: '" + value + "' (Length: " + value.length + ")";
+            resultDiv.textContent = processed;
+            console.log("Input processed:", value);
+          } else {
+            resultDiv.textContent = "Please type something first!";
+          }
+        }
+      }
+
+      function clearOutput() {
+        document.getElementById("output").textContent = "Output cleared!";
+        document.getElementById("output").style.backgroundColor = "white";
+        document.getElementById("result").textContent = "";
+        console.log("Output cleared");
+      }
+
+      // Test event listener
+      var testBtn = document.getElementById("userInput");
+      if (testBtn) {
+        console.log("Setting up input event listener...");
+        // Note: addEventListener might not work yet, but onclick should
+      }
+
+      console.log("✅ All JavaScript functions loaded!");
+      console.log("🔧 Ready for QuickJS testing!");
+    </script>
+  </body>
+</html>
