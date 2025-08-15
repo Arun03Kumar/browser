@@ -1,30 +1,29 @@
 import { useState } from "react";
 
-export default function Tabs() {
-  const [tabs, setTabs] = useState(["New Tab"]);
-
+export default function Tabs({ tabs, activeTabId, onTabClick, onAddTab }) {
   return (
     <div className="flex space-x-2 h-full items-center no-drag">
-      {tabs.map((tab, idx) => (
+      {tabs.map((tab) => (
         <div
-          key={idx}
-          className="flex items-center px-5 py-1 bg-gradient-to-b from-[#292929] to-[#232323] rounded-t-lg shadow-sm border border-b-0 border-gray-700 hover:from-[#333] hover:to-[#222] transition-all duration-150 cursor-pointer relative"
-          style={{
-            minWidth: "100px",
-            fontWeight: 500,
-            letterSpacing: "0.01em",
-            color: "#e0e0e0",
-          }}
+          key={tab.id}
+          onClick={() => onTabClick(tab.id)}
+          className={`flex items-center px-4 py-1 rounded-t-md border border-b-0 text-sm cursor-pointer transition-colors
+            ${
+              tab.id === activeTabId
+                ? "bg-gradient-to-b from-[#2d2d2d] to-[#242424] border-gray-600 text-white"
+                : "bg-[#232323] border-gray-700 text-gray-400 hover:text-white hover:bg-[#303030]"
+            }`}
+          style={{ minWidth: 90 }}
         >
-          <span className="truncate">{tab}</span>
+          <span className="truncate max-w-[120px]">{tab.title}</span>
         </div>
       ))}
       <button
-        onClick={() => setTabs([...tabs, "New Tab"])}
-        className="ml-2 flex items-center justify-center w-8 h-8 bg-[#232323] border border-gray-700 rounded-full text-gray-400 hover:text-white hover:bg-[#333] transition-all duration-150 shadow no-drag"
+        onClick={onAddTab}
+        className="ml-1 w-7 h-7 rounded-full bg-[#262626] border border-gray-700 text-gray-400 hover:bg-[#333] hover:text-white text-lg leading-none"
         title="New Tab"
       >
-        <span className="text-xl leading-none">+</span>
+        +
       </button>
     </div>
   );

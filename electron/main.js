@@ -1,7 +1,8 @@
 // main.js (ESM style)
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, Menu } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
+import { httpRequest } from "./utils/httpClient.js";
 
 // __dirname replacement in ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -37,7 +38,7 @@ function createWindow() {
         ],
       },
     ];
-    Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   } else {
     win.loadFile(path.join(__dirname, "../dist/index.html"));
   }
@@ -66,4 +67,8 @@ ipcMain.on("window-maximize", () => {
 
 ipcMain.on("window-close", () => {
   BrowserWindow.getFocusedWindow()?.close();
+});
+
+ipcMain.handle("http-request", async (event, url) => {
+  return await httpRequest(url);
 });
